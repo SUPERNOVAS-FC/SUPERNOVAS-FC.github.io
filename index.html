@@ -252,6 +252,14 @@ a.mrow{text-decoration:none;color:inherit}.mrow.league{grid-template-columns:aut
 .ovchart{background:var(--bg);border-radius:12px;padding:8px;margin:8px 0 12px}
 .ovsum div{background:var(--bg)}.ovsum b{color:var(--ink)}.ovsum span{color:var(--muted)}
 input[type=range]{width:100%;accent-color:var(--bib);min-height:32px}
+.pres{border-top:1px solid var(--line);background:var(--surface)}
+.pres-b{display:flex;align-items:center;gap:8px;width:100%;max-width:1080px;margin:0 auto;padding:6px 16px;border:0;background:none;font-size:.8rem;color:var(--muted);cursor:pointer;text-align:left;min-height:32px}
+.pres-b .pt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pres-b b{color:var(--ink)}
+.pdot{flex:none;width:8px;height:8px;border-radius:50%;background:var(--win);box-shadow:0 0 0 3px rgba(76,194,138,.25)}
+.chev{margin-left:auto;flex:none}
+.pres-d{max-width:1080px;margin:0 auto;padding:0 16px 10px;font-size:.86rem}
+.pres-d p{margin:4px 0}.pres-d ul{margin:2px 0 0;padding-left:18px}
 .empty-state{text-align:center;padding:32px 16px}
 @media (prefers-reduced-motion:no-preference){.board .big{animation:pop .5s ease-out both}@keyframes pop{from{transform:translateY(6px);opacity:0}to{transform:none;opacity:1}}}
 </style>
@@ -262,7 +270,7 @@ input[type=range]{width:100%;accent-color:var(--bib);min-height:32px}
   <div class="club" id="clubName">Chargement…</div>
   <nav class="tabs" id="tabs" aria-label="Navigation"></nav>
   <div id="acct" style="margin-left:auto;flex:none"></div>
-</div></header>
+</div><div id="pres" class="pres" hidden></div></header>
 <main id="app" aria-live="polite"></main>
 <nav class="bottom" id="bottom" aria-label="Navigation"></nav>
 <div id="toast" class="toast" hidden></div>
@@ -514,6 +522,7 @@ const ICONS={
 };
 function navItems(){ const n=[['tableau','Tableau'],['matchs','Matchs'],['effectif','Stats'],['profil','Mon profil','Profil']]; if(S.canEdit){ n.push(['cotisations','Cotisations','Cotis.']); n.push(['reglages','Réglages']); } return n; }
 function renderNav(){
+  renderPresence();
   const cur=S.view, okk=S.local||S.auth==='ok';
   document.getElementById('acct').innerHTML=(!S.local&&S.auth==='ok')?'<button class="btn ghost sm" data-a="logout">Déconnexion</button>':'';
   if(!okk){ document.getElementById('tabs').innerHTML=''; document.getElementById('bottom').innerHTML=''; document.getElementById('clubName').innerHTML='Stats du club<small>Foot 5</small>'; return; }
@@ -574,7 +583,7 @@ function vDashboard(){
   if(!S.players.length){
     h+= S.canEdit ? `<section class="panel"><h2>Bienvenue sur l\u2019app du club</h2><p class="muted">Trois étapes pour démarrer :</p>
       <ol class="steps-intro"><li><div><b>Ajoute tes joueurs</b> dans Réglages, avec leur numéro et leur poste.</div></li>
-      <li><div><b>Partage l\u2019app</b> à tes joueurs avec l\u2019accès « Contributeur » : chacun pourra remplir son profil et son poids.</div></li>
+      <li><div><b>Invite tes joueurs</b> : ajoute leur e-mail dans Réglages, section « Membres du club », puis envoie-leur le lien du site. Chacun crée son compte et remplit son profil.</div></li>
       <li><div><b>Saisis ton premier match</b> depuis l\u2019onglet Matchs.</div></li></ol>
       <div class="row" style="margin-top:12px"><button class="btn primary" data-a="nav" data-v="reglages">Ajouter les joueurs</button></div></section>`
     : `<section class="panel empty-state"><h2>L\u2019effectif n\u2019est pas encore créé</h2><p class="muted">Le responsable du club doit d\u2019abord ajouter les joueurs. Tu pourras ensuite te rattacher à ta fiche dans « Mon profil ».</p></section>`;
@@ -1565,6 +1574,53 @@ function bindInput(t){
 }
 window.addEventListener('beforeunload',e=>{ if((S.editing&&S.editDirty)||(S.plan&&S.planDirty)||S.profDirty||S.setDirty){ e.preventDefault(); e.returnValue=''; } });
 
+/* ---------- Bandeau de présence ---------- */
+const rtf=new Intl.RelativeTimeFormat('fr',{numeric:'auto'});
+function ago(ts){
+  const t=new Date(ts).getTime(), s=(t-Date.now())/1000, a=Math.abs(s);
+  if(!isFinite(t)) return '';
+  if(a<90) return 'à l\u2019instant';
+  if(a<3600) return rtf.format(Math.round(s/60),'minute');
+  if(a<86400) return rtf.format(Math.round(s/3600),'hour');
+  if(a<7*86400) return rtf.format(Math.round(s/86400),'day');
+  return 'le '+new Date(t).toLocaleDateString('fr-FR',{day:'numeric',month:'short'});
+}
+function visitorName(v){
+  const pr=S.profiles.find(p=>p.id===v.user_id), p=pr&&pr.playerId&&player(pr.playerId);
+  return p?shortName(p):String(v.email||'membre').split('@')[0];
+}
+async function touchVisit(){
+  if(S.local||!sb) return;
+  const {data,error}=await sb.rpc('touch_visit');
+  if(error){ S.visitsErr=true; } else { S.visits=data||[]; S.visitsErr=false; }
+  renderPresence();
+}
+function startPresence(){
+  if(S.local||!sb||startPresence.on) return; startPresence.on=true;
+  touchVisit();
+  setInterval(()=>{ if(document.visibilityState==='visible') touchVisit(); },4*60000);
+  setInterval(renderPresence,60000);
+  document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') touchVisit(); });
+  const ch=sb.channel('presence-club',{config:{presence:{key:S.uid}}});
+  ch.on('presence',{event:'sync'},()=>{ S.online=Object.keys(ch.presenceState()); renderPresence(); })
+    .subscribe(async st=>{ if(st==='SUBSCRIBED'){ try{ await ch.track({at:Date.now()}); }catch(e){} } });
+}
+function renderPresence(){
+  const el=document.getElementById('pres'); if(!el) return;
+  if(S.local||S.auth!=='ok'){ el.hidden=true; el.innerHTML=''; return; }
+  el.hidden=false;
+  const vs=S.visits||[], known=new Set(vs.map(v=>v.user_id));
+  const on=[...new Set([S.uid,...(S.online||[]).filter(u=>known.has(u))])];
+  const others=vs.filter(v=>v.user_id!==S.uid&&!on.includes(v.user_id)).sort((a,b)=>new Date(b.last_seen)-new Date(a.last_seen));
+  const last=others[0], me=vs.find(v=>v.user_id===S.uid), n=on.length;
+  const lastTxt=last?`Dernière connexion : ${esc(visitorName(last))}, ${ago(last.last_seen)}`:(vs.length>1?'Tout le club est en ligne':'');
+  el.innerHTML=`<button class="pres-b" data-a="presopen" aria-expanded="${!!S.presOpen}"><span class="pdot" aria-hidden="true"></span><span class="pt"><b>${n}</b> connecté${n>1?'s':''}${lastTxt?' · '+lastTxt:''}</span><span class="chev" aria-hidden="true">${S.presOpen?'▴':'▾'}</span></button>`+
+  (S.presOpen?`<div class="pres-d">
+    <p><b>En ligne maintenant :</b> ${on.map(u=>u===S.uid?'toi':esc(visitorName(vs.find(v=>v.user_id===u)||{}))).join(', ')}</p>
+    ${me&&me.prev_seen?`<p>Ta visite précédente : ${ago(me.prev_seen)}</p>`:''}
+    ${others.length?`<p><b>Dernières connexions</b></p><ul>${others.slice(0,8).map(v=>`<li>${esc(visitorName(v))} <span class="muted">${ago(v.last_seen)}</span></li>`).join('')}</ul>`:''}
+    ${S.visitsErr&&S.canEdit?'<p class="warn small">Historique des connexions indisponible : exécute le fichier presence.sql dans Supabase.</p>':''}</div>`:'');
+}
 /* ---------- Démarrage ---------- */
 route(location.hash.slice(1));
 S.auth='loading'; render();
@@ -1600,13 +1656,14 @@ async function boot(session){
     }).subscribe();
   }
   if(S.canEdit) loadMembers();
-  S.auth='ok'; S.ready=true; render();
+  S.auth='ok'; S.ready=true; render(); startPresence();
 }
 document.addEventListener('click', async e=>{
   const b=e.target.closest('[data-a]'); if(!b) return;
   const a=b.dataset.a;
   if(a==='demo'){ S.local=true; S.canEdit=true; S.uid='local'; S.auth='ok'; S.ready=true; render(); }
   if(a==='reload') location.reload();
+  if(a==='presopen'){ S.presOpen=!S.presOpen; renderPresence(); }
   if(a==='logout'){ if(!leaveGuard()) return; await sb.auth.signOut(); location.hash=''; location.reload(); }
   if(a==='login'||a==='signup'){
     const email=document.getElementById('au-email').value.trim().toLowerCase(), password=document.getElementById('au-pass').value;
