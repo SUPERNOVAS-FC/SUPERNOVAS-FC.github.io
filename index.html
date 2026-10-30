@@ -10,7 +10,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E⚽%3C/text%3E%3C/svg%3E">
 <meta name="theme-color" content="#1D6847">
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=Inter:wght@400;600;700;800&family=Press+Start+2P&family=Rubik:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
   --bg:#F2F4EF; --surface:#FFFFFF; --surface-2:#E8EDE6; --ink:#13241C; --muted:#5A6C62; --line:#D8E0D6;
@@ -262,6 +262,48 @@ input[type=range]{width:100%;accent-color:var(--bib);min-height:32px}
 .pres-d p{margin:4px 0}.pres-d ul{margin:2px 0 0;padding-left:18px}
 .empty-state{text-align:center;padding:32px 16px}
 @media (prefers-reduced-motion:no-preference){.board .big{animation:pop .5s ease-out both}@keyframes pop{from{transform:translateY(6px);opacity:0}to{transform:none;opacity:1}}}
+/* ===== Habillages : Classique (sombre sportif) et Arcade ===== */
+:root[data-skin="classic"]{--bg:#000000;--surface:#1C1C1E;--surface-2:#2C2C2E;--ink:#F5F5F7;--muted:#A1A1A6;--line:#38383A;--turf:#30D158;--turf-2:#28B04A;--on-turf:#04110B;--chalk:rgba(255,255,255,.07);--bib:#FF9F0A;--bib-soft:#3A2A12;--on-bib:#1A0E00;--win:#30D158;--draw:#FFD60A;--loss:#FF6961;--focus:#64D2FF;color-scheme:dark}
+[data-skin="classic"] body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",Inter,"Segoe UI",Roboto,sans-serif}
+[data-skin="classic"] .num,[data-skin="classic"] h1,[data-skin="classic"] h2,[data-skin="classic"] h3,[data-skin="classic"] .club,[data-skin="classic"] .kpi .v,[data-skin="classic"] .score .big,[data-skin="classic"] .phys .pbig,[data-skin="classic"] .lb .val,[data-skin="classic"] .ratio .v,[data-skin="classic"] .amt,[data-skin="classic"] .phys-grid b,[data-skin="classic"] .mrow .sc,[data-skin="classic"] .pcard .stat b,[data-skin="classic"] .cmp b{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display",Inter,"Segoe UI",sans-serif;font-weight:800;letter-spacing:-.02em}
+[data-skin="classic"] .panel,[data-skin="classic"] .kpi,[data-skin="classic"] .pcard,[data-skin="classic"] .mrow,[data-skin="classic"] .prow{border-color:transparent;border-radius:22px}
+[data-skin="classic"] .board{background:var(--surface);color:var(--ink);border-radius:24px}
+[data-skin="classic"] .score .big{font-size:clamp(3.8rem,17vw,6.5rem)}
+[data-skin="classic"] .res{background:var(--turf);color:var(--on-turf)}
+[data-skin="classic"] .btn,[data-skin="classic"] .chip,[data-skin="classic"] select.plain{border-radius:999px}
+[data-skin="classic"] header.top,[data-skin="classic"] nav.bottom,[data-skin="classic"] .pres{background:rgba(22,22,24,.88);backdrop-filter:blur(20px);border-color:rgba(255,255,255,.12)}
+[data-skin="classic"] body::before{background:#161618}
+
+:root[data-skin="arcade"]{--bg:#1B0B3A;--surface:#24104D;--surface-2:#3A1A6E;--ink:#FFFFFF;--muted:#D9CCFF;--line:#4B2A85;--turf:#2EE6FF;--turf-2:#20B8CC;--on-turf:#1B0B3A;--chalk:rgba(46,230,255,.18);--bib:#FF2E88;--bib-soft:#3D1F5C;--on-bib:#1B0B3A;--win:#7CFF4F;--draw:#FFE14D;--loss:#FF2E88;--focus:#FFE14D;color-scheme:dark}
+[data-skin="arcade"] body{font-family:Rubik,system-ui,sans-serif}
+[data-skin="arcade"] h1,[data-skin="arcade"] h2,[data-skin="arcade"] h3,[data-skin="arcade"] .club,[data-skin="arcade"] .num,[data-skin="arcade"] .kpi .v,[data-skin="arcade"] .lb .val,[data-skin="arcade"] .ratio .v,[data-skin="arcade"] .amt,[data-skin="arcade"] .phys-grid b,[data-skin="arcade"] .mrow .sc,[data-skin="arcade"] .pcard .stat b,[data-skin="arcade"] .stp .val,[data-skin="arcade"] .cmp b,[data-skin="arcade"] .res,[data-skin="arcade"] .btn.primary{font-family:"Press Start 2P",monospace;font-weight:400;letter-spacing:0}
+[data-skin="arcade"] h2{font-size:1rem;line-height:1.5;color:#FFE14D;text-shadow:2px 2px 0 #FF2E88}
+[data-skin="arcade"] h3{font-size:.72rem;line-height:1.6;color:#2EE6FF}
+[data-skin="arcade"] .club{font-size:.8rem;line-height:1.5;color:#FFE14D;text-shadow:2px 2px 0 #FF2E88}
+[data-skin="arcade"] .club small{font-family:Rubik,sans-serif;text-shadow:none;color:var(--muted)}
+[data-skin="arcade"] .kpi .v{font-size:1.05rem;line-height:1.5}
+[data-skin="arcade"] .lb .val,[data-skin="arcade"] .ratio .v,[data-skin="arcade"] .amt,[data-skin="arcade"] .cmp b,[data-skin="arcade"] .pcard .stat b,[data-skin="arcade"] .stp .val{font-size:.75rem}
+[data-skin="arcade"] .phys-grid b{font-size:.8rem;line-height:1.7}
+[data-skin="arcade"] .mrow .sc{font-size:.85rem}
+[data-skin="arcade"] .score .big{font-size:clamp(1.8rem,9vw,3rem);color:#FFE14D;text-shadow:3px 3px 0 #FF2E88}
+[data-skin="arcade"] .phys .pbig{font-family:"Press Start 2P",monospace;font-size:clamp(1.8rem,9vw,3rem);color:#FFE14D;text-shadow:3px 3px 0 #FF2E88}
+[data-skin="arcade"] .board{background:var(--surface);color:var(--ink);border:3px solid #2EE6FF}
+[data-skin="arcade"] .panel,[data-skin="arcade"] .kpi,[data-skin="arcade"] .pcard,[data-skin="arcade"] .mrow,[data-skin="arcade"] .prow{border:2px solid #4B2A85}
+[data-skin="arcade"] .panel,[data-skin="arcade"] .kpi,[data-skin="arcade"] .pcard,[data-skin="arcade"] .mrow,[data-skin="arcade"] .prow,[data-skin="arcade"] .board,[data-skin="arcade"] .note,[data-skin="arcade"] .fbox,[data-skin="arcade"] .btn,[data-skin="arcade"] .chip,[data-skin="arcade"] .tog,[data-skin="arcade"] select.plain,[data-skin="arcade"] label.f input,[data-skin="arcade"] label.f select,[data-skin="arcade"] textarea,[data-skin="arcade"] .dot,[data-skin="arcade"] .res{border-radius:3px}
+[data-skin="arcade"] .badge,[data-skin="arcade"] .av{border-radius:3px!important}
+[data-skin="arcade"] .av{outline:2px solid #FFE14D}
+[data-skin="arcade"] .btn.primary{background:#FFE14D;border-color:#FFE14D;color:#1B0B3A;font-size:.62rem;box-shadow:4px 4px 0 #FF2E88}
+[data-skin="arcade"] .res{background:#FFE14D;color:#1B0B3A;font-size:.6rem}
+[data-skin="arcade"] .lb .bar,[data-skin="arcade"] .pbar,[data-skin="arcade"] .cmp .cb{height:10px;border:2px solid #FFFFFF;border-radius:0;background:#3A1A6E}
+[data-skin="arcade"] .lb .bar,[data-skin="arcade"] .lb li:first-child .bar{background:#FF2E88}
+[data-skin="arcade"] .pbar i,[data-skin="arcade"] .cmp .cb i{border-radius:0}
+[data-skin="arcade"] .chip[aria-pressed="true"]{background:#FFE14D;color:#1B0B3A;border-color:#FFE14D}
+[data-skin="arcade"] .note{background:#3D1F5C}
+[data-skin="arcade"] header.top,[data-skin="arcade"] nav.bottom,[data-skin="arcade"] .pres{background:#12072A;border-color:#4B2A85}
+[data-skin="arcade"] body::before{background:#12072A}
+[data-skin="arcade"] .st-table td.on{color:#FFE14D}
+[data-skin] nav.bottom button[aria-current="page"],[data-skin] nav.tabs button[aria-current="page"]{color:var(--turf)}
+[data-skin] .dot{color:#0A0A0A}
 </style>
 </head>
 <body>
@@ -282,6 +324,8 @@ function showFatal(m){ const a=document.getElementById('app'); if(a) a.innerHTML
 </script>
 <script>
 "use strict";
+function getSkin(){ try{ return localStorage.getItem('skin')==="arcade"?"arcade":"classic"; }catch(e){ return "classic"; } }
+document.documentElement.dataset.skin=getSkin();
 /* ---------- Catalogue des indicateurs ---------- */
 const KPIS = [
   {k:'goals',l:'Buts',s:'B',g:'jeu',def:1},
@@ -524,7 +568,7 @@ function navItems(){ const n=[['tableau','Tableau'],['matchs','Matchs'],['effect
 function renderNav(){
   renderPresence();
   const cur=S.view, okk=S.local||S.auth==='ok';
-  document.getElementById('acct').innerHTML=(!S.local&&S.auth==='ok')?'<button class="btn ghost sm" data-a="logout">Déconnexion</button>':'';
+  document.getElementById('acct').innerHTML=`<div class="row" style="gap:4px;flex-wrap:nowrap"><button class="btn ghost sm" data-a="skin" aria-label="Changer d\u2019affichage">${getSkin()==='arcade'?'Classique':'Arcade'}</button>${(!S.local&&S.auth==='ok')?'<button class="btn ghost sm" data-a="logout">Déconnexion</button>':''}</div>`;
   if(!okk){ document.getElementById('tabs').innerHTML=''; document.getElementById('bottom').innerHTML=''; document.getElementById('clubName').innerHTML='Stats du club<small>Foot 5</small>'; return; }
   document.getElementById('tabs').innerHTML=navItems().map(([id,l])=>`<button data-a="nav" data-v="${id}" ${cur===id?'aria-current="page"':''}>${l}</button>`).join('');
   document.getElementById('bottom').innerHTML=navItems().map(([id,l,sh])=>`<button data-a="nav" data-v="${id}" ${cur===id?'aria-current="page"':''}>${ICONS[id]}<span>${sh||l}</span></button>`).join('');
@@ -1663,6 +1707,7 @@ document.addEventListener('click', async e=>{
   const a=b.dataset.a;
   if(a==='demo'){ S.local=true; S.canEdit=true; S.uid='local'; S.auth='ok'; S.ready=true; render(); }
   if(a==='reload') location.reload();
+  if(a==='skin'){ const n=getSkin()==='arcade'?'classic':'arcade'; try{ localStorage.setItem('skin',n); }catch(e){} document.documentElement.dataset.skin=n; render(); }
   if(a==='presopen'){ S.presOpen=!S.presOpen; renderPresence(); }
   if(a==='logout'){ if(!leaveGuard()) return; await sb.auth.signOut(); location.hash=''; location.reload(); }
   if(a==='login'||a==='signup'){
