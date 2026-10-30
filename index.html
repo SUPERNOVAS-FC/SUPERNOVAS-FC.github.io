@@ -262,6 +262,26 @@ input[type=range]{width:100%;accent-color:var(--bib);min-height:32px}
 .pres-d p{margin:4px 0}.pres-d ul{margin:2px 0 0;padding-left:18px}
 .empty-state{text-align:center;padding:32px 16px}
 @media (prefers-reduced-motion:no-preference){.board .big{animation:pop .5s ease-out both}@keyframes pop{from{transform:translateY(6px);opacity:0}to{transform:none;opacity:1}}}
+.star{position:relative;overflow:hidden;border-radius:18px;background:#0B0B14;color:#FFFFFF;text-align:center;padding:24px 12px 18px;isolation:isolate}
+.star .aura{position:absolute;left:50%;top:-57px;width:240px;height:330px;transform:translateX(-50%);z-index:-1;overflow:visible}
+.star .fl{transform-box:fill-box;transform-origin:50% 70%;animation:flick var(--spd) ease-in-out infinite alternate}
+.star .fl2{animation-duration:calc(var(--spd) * .7);animation-direction:alternate-reverse}
+.star .glow{transform-box:fill-box;transform-origin:center;animation:pulse 2.2s ease-in-out infinite}
+.star .arc{opacity:0;animation:zap 1.3s steps(1) infinite}
+.star .spark{animation:rise 3.2s linear infinite;opacity:0}
+@keyframes flick{0%{transform:scale(.94,.9)}50%{transform:scale(1.02,1.06)}100%{transform:scale(.97,1.14)}}
+@keyframes pulse{0%,100%{transform:scale(1);opacity:.25}50%{transform:scale(1.12);opacity:.4}}
+@keyframes zap{0%,60%{opacity:0}62%,68%{opacity:1}70%{opacity:.15}72%,76%{opacity:1}78%,100%{opacity:0}}
+@keyframes rise{0%{transform:translateY(30px);opacity:0}20%{opacity:1}100%{transform:translateY(-170px);opacity:0}}
+@media (prefers-reduced-motion:reduce){.star *{animation:none!important}.star .arc{opacity:.8}}
+.star .ph{display:flex;justify-content:center;margin:64px auto 16px}
+.star .ph>*{border-radius:50%!important;box-shadow:0 0 0 3px var(--c2),0 0 24px var(--c1)}
+.star .t1{font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:#D8D8E0}
+.star .t2{font-weight:700;font-size:1.15rem;color:#FFFFFF;text-align:center}
+.star .t3{color:var(--c1);font-weight:700;margin-top:4px}
+.star .t4{font-size:.78rem;color:#C9C9D4;margin-top:4px}
+.star.side{display:none}
+@media (min-width:1420px){.star.side{display:block;position:fixed;right:20px;top:150px;width:180px;z-index:4}.star.inline{display:none}}
 /* ===== Habillages : Classique (sombre sportif) et Arcade ===== */
 :root[data-skin="classic"]{--bg:#000000;--surface:#1C1C1E;--surface-2:#2C2C2E;--ink:#F5F5F7;--muted:#A1A1A6;--line:#38383A;--turf:#30D158;--turf-2:#28B04A;--on-turf:#04110B;--chalk:rgba(255,255,255,.07);--bib:#FF9F0A;--bib-soft:#3A2A12;--on-bib:#1A0E00;--win:#30D158;--draw:#FFD60A;--loss:#FF6961;--focus:#64D2FF;color-scheme:dark}
 [data-skin="classic"] body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",Inter,"Segoe UI",Roboto,sans-serif}
@@ -314,6 +334,7 @@ input[type=range]{width:100%;accent-color:var(--bib);min-height:32px}
   <div id="acct" style="margin-left:auto;flex:none"></div>
 </div><div id="pres" class="pres" hidden></div></header>
 <main id="app" aria-live="polite"></main>
+<div id="sideStar"></div>
 <nav class="bottom" id="bottom" aria-label="Navigation"></nav>
 <div id="toast" class="toast" hidden></div>
 
@@ -369,7 +390,7 @@ const S = {
   editing:null, editDirty:false, prof:null, profDirty:false, setDraft:null, setDirty:false,
   editPlayer:null, showArchived:false, plan:null, planDirty:false, feeSeason:null, feeOpen:null, fees:[], got:{s:0,p:0,m:0,pr:0,f:0}
 };
-const L = {settings:null,players:{},matches:{},profiles:{},fees:{}};
+const L = {settings:null,players:{},matches:{},profiles:{},fees:{},evals:{}};
 
 /* ---------- Utilitaires ---------- */
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -436,7 +457,7 @@ async function loadAll(){
     if(error){ toast("Impossible de charger les données du club."); break; }
     rows.push(...data); if(data.length<step) break;
   }
-  L.settings=null; L.players={}; L.matches={}; L.profiles={}; L.fees={};
+  L.settings=null; L.players={}; L.matches={}; L.profiles={}; L.fees={}; L.evals={};
   for(const r of rows) applyRow(r.col,r.id,r.data);
   syncLocal();
 }
@@ -451,6 +472,7 @@ function syncLocal(){
   S.matches=Object.entries(L.matches).map(([id,d])=>({id,...d})).sort(byDate);
   S.profiles=Object.entries(L.profiles).map(([id,d])=>({id,...d}));
   S.fees=Object.entries(L.fees).map(([id,d])=>({id,...d}));
+  S.evals=L.evals;
   render(true);
 }
 const byDate=(a,b)=>(b.date||'').localeCompare(a.date||'');
@@ -570,6 +592,7 @@ function navItems(){ const n=[['tableau','Tableau'],['matchs','Matchs'],['effect
 function clubLogo(){ const c=cfg(); if(c.logo&&/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(c.logo)) return c.logo; if(c.logoUrl&&/^https:\/\/[^\s"'<>]+$/i.test(c.logoUrl)) return c.logoUrl; return null; }
 function renderNav(){
   renderPresence();
+  { const ss=document.getElementById('sideStar'); if(ss) ss.innerHTML=(S.ready&&(S.local||S.auth==='ok'))?starCard('side'):''; }
   { const cr=document.getElementById('crest'), ic=document.querySelector('link[rel=icon]'); if(!renderNav.d){ renderNav.d=cr.innerHTML; renderNav.i=ic&&ic.href; }
     const lg=clubLogo(); cr.innerHTML=lg?`<img src="${esc(lg)}" alt="" referrerpolicy="no-referrer" style="width:100%;height:100%;object-fit:contain;border-radius:8px;background:#fff">`:renderNav.d; cr.style.background=lg?'transparent':''; if(ic) ic.href=lg||renderNav.i; }
   const cur=S.view, okk=S.local||S.auth==='ok';
@@ -584,7 +607,7 @@ function renderNav(){
 function render(fromData){
   renderNav();
   if(!S.local&&S.auth!=='ok'){ document.getElementById('app').innerHTML=vAuth(); return; }
-  if(fromData && ((S.editing&&S.editDirty)||(S.plan&&S.planDirty)||S.profDirty||S.setDirty)) return;
+  if(fromData && (S.evalDirty||(S.editing&&S.editDirty)||(S.plan&&S.planDirty)||S.profDirty||S.setDirty)) return;
   const app=document.getElementById('app');
   if(!S.ready){ app.innerHTML='<p class="muted">Chargement des données du club…</p>'; return; }
   let h='';
@@ -640,6 +663,7 @@ function vDashboard(){
   }
   const last=played()[0];
   h+= last ? vBoard(last) : `<section class="board">${PITCH}<div class="in"><div class="meta">Aucun match saisi</div><div class="score"><div class="team">${esc(c.clubName)}</div><div class="big num">0<span>–</span>0</div><div class="team r">À venir</div></div>${S.canEdit?'<button class="btn primary" data-a="newmatch">Saisir un match</button>':''}</div></section>`;
+  h+=starCard('inline');
   h+=nextCard();
   h+=leagueLink();
   h+=filtersBar();
@@ -707,6 +731,7 @@ function vMatch(){
     ${rows.map(({pid,r})=>{const w=weightAt(pid,m.date);return `<tr><td><button class="link" data-a="player" data-v="${pid}">${esc(pname(player(pid)))}</button>${r.gk?' <span class="muted small">(G)</span>':''}${m.motm===pid?' <span title="Homme du match">★</span>':''}</td><td>${nf(r.min)}</td><td>${w?nf(w.kg,1)+' kg':'—'}</td>${cols.map(d=>`<td>${nf(r[d.k],d.dec||d.rating?1:0)}</td>`).join('')}</tr>`;}).join('')}</tbody></table></div>`:'<p class="muted">Aucun joueur saisi sur ce match.</p>'}</section>`;
   const kms=rows.filter(x=>isNum(x.r.km)).sort((x,y)=>y.r.km-x.r.km);
   if(kms.length){ const mx=kms[0].r.km; h+=`<section class="panel"><h3>Distance parcourue</h3>${kms.map(({pid,r})=>`<div class="cmp wide"><button class="link pl" data-a="player" data-v="${pid}">${avatar(pid,24)}<span>${esc(shortName(player(pid)))}</span></button><div class="cb"><i style="width:${100*r.km/mx}%"></i></div><b>${nf(r.km,2)} km</b></div>`).join('')}</section>`; }
+  h+=vEvalBlock(m,rows);
   if(gks.length&&gcols.length) h+=`<section class="panel"><h3>Gardiens</h3><div class="tw"><table><thead><tr><th>Gardien</th><th>Min dans les buts</th>${gcols.map(d=>`<th>${esc(d.s)}</th>`).join('')}<th>% arrêts</th></tr></thead><tbody>
     ${gks.map(({pid,r})=>`<tr><td>${esc(pname(player(pid)))}</td><td>${nf(r.gkMin)}</td>${gcols.map(d=>`<td>${nf(r[d.k])}</td>`).join('')}<td>${pct(r.saves||0,(r.saves||0)+(r.conceded||0))}</td></tr>`).join('')}</tbody></table></div></section>`;
   return h+'</div>';
@@ -900,6 +925,85 @@ function vFees(){
 }
 
 /* ----- Effectif & fiche joueur ----- */
+/* ----- Coach : notes et appréciations ----- */
+const EVAL_TAGS=['Aspect défensif','Aspect offensif','Agressivité','Mouvements','Déchets techniques','Combinaisons','Éliminations','Pertes dangereuses','Gestion de l\u2019énergie'];
+const EVAL_K=[['off','Offensif'],['def','Défensif'],['mov','Mouvements / combinaisons']];
+function evalsOf(mid){ return ((S.evals||{})[mid]||{}).players||{}; }
+function vEvalBlock(m,rows){
+  const ev=evalsOf(m.id);
+  if(S.evalEdit&&S.evalMid===m.id){
+    const d=S.evalEdit;
+    return `<section class="panel"><div class="spread"><h3 style="margin:0">Évaluation du coach</h3><button class="btn ghost sm" data-a="evcancel">Annuler</button></div>
+    ${rows.map(({pid})=>{ const e=d[pid]||{}; return `<div class="frow"><div class="top"><span class="nm">${esc(pname(player(pid)))}</span></div>
+      <div class="mini">${EVAL_K.map(([k,l])=>`<label class="f">${l} /10<input inputmode="decimal" data-ev="${pid}|${k}" value="${esc(e[k]??'')}" placeholder="—"></label>`).join('')}</div>
+      <div class="chips" style="margin-top:8px">${EVAL_TAGS.map(t=>`<button class="chip" data-a="evtag" data-v="${pid}|${esc(t)}" aria-pressed="${(e.tags||[]).includes(t)}">${esc(t)}</button>`).join('')}</div>
+      <label class="f" style="margin-top:8px">Autre appréciation<input data-ev="${pid}|txt" value="${esc(e.txt||'')}" placeholder="Facultatif"></label></div>`; }).join('')}
+    <div class="row" style="margin-top:12px"><button class="btn primary" data-a="evsave" data-v="${m.id}">Enregistrer l\u2019évaluation</button></div></section>`;
+  }
+  const ids=Object.keys(ev).filter(pid=>player(pid));
+  if(!ids.length&&!S.canCoach) return '';
+  return `<section class="panel"><div class="spread"><h3 style="margin:0">Évaluation du coach</h3>${S.canCoach?`<button class="btn sm" data-a="evedit" data-v="${m.id}">${ids.length?'Modifier':'Évaluer les joueurs'}</button>`:''}</div>
+  ${ids.length?`<div class="tw" style="margin-top:8px"><table><thead><tr><th>Joueur</th><th>Off.</th><th>Déf.</th><th>Mouv.</th><th style="text-align:left">Appréciations</th></tr></thead><tbody>${ids.map(pid=>{const e=ev[pid];return `<tr><td>${esc(pname(player(pid)))}</td>${EVAL_K.map(([k])=>`<td>${nf(e[k],1)}</td>`).join('')}<td style="text-align:left;white-space:normal;min-width:160px">${esc([...(e.tags||[]),e.txt].filter(Boolean).join(' · '))}</td></tr>`;}).join('')}</tbody></table></div>`:'<p class="muted small">Pas encore d\u2019évaluation pour ce match.</p>'}</section>`;
+}
+function coachBlock(pid,ms){
+  const list=ms.map(m=>({m,e:evalsOf(m.id)[pid]})).filter(x=>x.e);
+  if(!list.length) return '';
+  const av=k=>{ const v=list.map(x=>x.e[k]).filter(isNum); return v.length?v.reduce((a,b)=>a+b,0)/v.length:null; };
+  const notes=list.filter(x=>(x.e.tags||[]).length||x.e.txt).slice(0,4);
+  return `<section class="panel"><h3>Avis du coach</h3><div class="kpis">${EVAL_K.map(([k,l])=>`<div class="kpi"><div class="v">${av(k)!=null?nf(av(k),1):'—'}</div><div class="l">${l}</div></div>`).join('')}</div>
+  ${notes.length?`<div class="roster" style="margin-top:10px">${notes.map(x=>`<div class="r"><span class="nm"><b>${fdate(x.m.date,{day:'numeric',month:'short'})}</b> · ${esc([...(x.e.tags||[]),x.e.txt].filter(Boolean).join(' · '))}</span></div>`).join('')}</div>`:''}
+  <p class="muted small">Moyennes sur ${list.length} match(s) évalué(s).</p></section>`;
+}
+
+/* ----- Bandeau du meilleur buteur ----- */
+const LV=[null,{n:'Éveil doré',c1:'#FFD84D',c2:'#FFF6B0',arcs:0,spd:'1.6s',len:.8},{n:'Foudre dorée',c1:'#FFC93C',c2:'#FFF6B0',arcs:4,spd:'1.1s',len:1},{n:'Tempête dorée',c1:'#FFB703',c2:'#FFE680',arcs:7,spd:'.75s',len:1.45},{n:'Instinct ultime',c1:'#8EC5FF',c2:'#F2F8FF',arcs:0,spd:'1.3s',len:1.05,ui:1}];
+function starInfo(){
+  const champ=played().filter(m=>m.type==='championnat'&&m.date>=seasonStart()).sort((a,b)=>a.date.localeCompare(b.date));
+  const st={};
+  for(const m of champ){
+    const g=Object.entries(m.stats||{}).filter(([,r])=>r.present).map(([pid,r])=>[pid,r.goals||0]);
+    const mx=Math.max(0,...g.map(x=>x[1])); const tops=new Set(mx>0?g.filter(x=>x[1]===mx).map(x=>x[0]):[]);
+    for(const pid of Object.keys(st)) if(!tops.has(pid)) st[pid].cur=0;
+    for(const pid of tops){ const o=st[pid]||(st[pid]={pid,season:0,cur:0,best:0,last:''}); o.season++; o.cur++; o.best=Math.max(o.best,o.cur); o.last=m.date; }
+  }
+  const lv=o=>o.best>=4||o.season>=6?4:o.best>=3||o.season>=5?3:o.best>=2||o.season>=4?2:1;
+  const all=Object.values(st).filter(o=>player(o.pid)).map(o=>Object.assign(o,{lvl:lv(o)}));
+  all.sort((a,b)=>b.lvl-a.lvl||b.last.localeCompare(a.last)||b.season-a.season);
+  return all[0]||null;
+}
+function auraPath(len,seed){
+  let d=''; const N=20;
+  for(let i=0;i<N*2;i++){ const a=Math.PI*2*i/(N*2)-Math.PI/2, u=(1-Math.sin(a))/2;
+    const r=i%2?46+10*u:50+(80*u*u*len)+(((i*37+seed*11)%13)/13)*16*u;
+    d+=(i?'L':'M')+(Math.cos(a)*r*0.75).toFixed(1)+' '+(Math.sin(a)*r).toFixed(1); }
+  return d+'Z';
+}
+function arcsSvg(n){
+  let s='';
+  for(let k=0;k<n;k++){ let a=(k*137%360)*Math.PI/180, r=46, pts=[];
+    for(let j=0;j<6;j++){ pts.push((Math.cos(a)*r*0.85).toFixed(0)+','+(Math.sin(a)*r).toFixed(0)); r+=14; a+=((j*53+k*29)%7-3)*0.06; }
+    s+=`<polyline class="arc" style="animation-delay:${(k*0.37%1.3).toFixed(2)}s" points="${pts.join(' ')}" fill="none" stroke="#EAF6FF" stroke-width="2.4"/>`; }
+  return s;
+}
+function starCard(cls){
+  const s=starInfo(); if(!s) return '';
+  const L=LV[s.lvl], p=player(s.pid);
+  let sp=''; if(L.ui) for(let k=0;k<12;k++) sp+=`<circle class="spark" cx="${(k*47%140)-70}" cy="${40+(k*29%60)}" r="${1+k%3*0.6}" fill="#FFFFFF" style="animation-delay:${(k*0.27).toFixed(2)}s"/>`;
+  return `<aside class="star ${cls}" style="--c1:${L.c1};--c2:${L.c2};--spd:${L.spd}" aria-label="Meilleur buteur : ${esc(pname(p))}, ${esc(L.n)}">
+    <svg class="aura" viewBox="-110 -170 220 300" aria-hidden="true">
+      <ellipse class="glow" cx="0" cy="-20" rx="66" ry="80" fill="${L.c1}" opacity=".25"/>
+      <path class="fl" d="${auraPath(L.len,1)}" fill="${L.c1}" opacity=".7"/>
+      <path class="fl fl2" d="${auraPath(L.len*0.85,4)}" fill="${L.c2}" opacity=".55"/>
+      ${arcsSvg(L.arcs)}${sp}
+    </svg>
+    <div class="ph">${avatar(s.pid,84)}</div>
+    <div class="t1">Meilleur buteur</div>
+    <button class="link t2" data-a="player" data-v="${s.pid}">${esc(pname(p))}</button>
+    <div class="t3">Niveau ${s.lvl} · ${esc(L.n)}</div>
+    <div class="t4">${s.season}× meilleur buteur en championnat · série de ${s.best}</div>
+  </aside>`;
+}
+
 /* ----- Photos ----- */
 const PHOTO_RE=/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/;
 function photoOf(pid){ const pr=profileOf(pid)||{}, p=player(pid)||{}; const ph=pr.photo||p.photo||null; return ph&&PHOTO_RE.test(ph)?ph:null; }
@@ -1053,6 +1157,7 @@ function playerDetail(pid,ms){
     h+=`<div class="grid g2"><section class="panel"><h3>Ratios</h3><div class="ratios">${ratiosFor(a).map(r=>`<div class="ratio"><span class="l">${esc(r.l)}</span><span class="v">${r.v}</span>${r.h?`<span class="h">${esc(r.h)}</span>`:''}</div>`).join('')}</div></section>`;
     h+= g.length?`<section class="panel"><h3>Gardien de but</h3><p class="muted small" style="margin-top:-6px">${a.gkN} match(s), ${nf(a.gkMin)} min dans les buts</p><div class="ratios">${g.map(r=>`<div class="ratio"><span class="l">${esc(r.l)}</span><span class="v">${r.v}</span>${r.h?`<span class="h">${esc(r.h)}</span>`:''}</div>`).join('')}</div></section></div>${dec}`:`${dec}</div>`;
   }
+  h+=coachBlock(p.id,ms);
   h+=physique(p.id,a,ms,isMe);
   h+=`<section class="panel"><div class="spread"><h3>Poids</h3>${lw?`<span class="muted small">${ws.length} pesée(s)</span>`:''}</div>${lineChart(ws,a.rows.map(x=>x.m.date))}<p class="muted small">Les traits en bas marquent les matchs : le poids retenu pour chaque performance est la dernière pesée connue à cette date.</p>
     ${(S.canEdit&&!profileOf(p.id))?`<div class="row" style="margin-top:8px"><label class="f" style="max-width:150px">Date<input type="date" id="pwd" value="${today()}"></label><label class="f" style="max-width:120px">Poids (kg)<input id="pwk" inputmode="decimal" placeholder="75,5"></label><button class="btn" style="align-self:end" data-a="pweight" data-v="${p.id}">Ajouter la pesée</button></div><p class="muted small">Ce joueur n\u2019a pas encore de compte rattaché : tu peux saisir son poids à sa place.</p>`:''}</section>`;
@@ -1184,9 +1289,9 @@ function vSettings(){
     <p class="muted small" style="margin-top:8px">« Retirer » sort le joueur de l\u2019effectif et de la feuille de match en gardant tout son historique. « Supprimer » efface sa fiche ; ses lignes de match restent mais n\u2019apparaissent plus dans les classements.</p></section>
   <section class="panel"><h3>Membres du club</h3><p class="muted small">Seules les adresses de cette liste peuvent ouvrir l\u2019app. Envoie-leur le lien : à la première visite, chacun crée son compte avec cette adresse et un mot de passe.</p>
   ${S.local?'<p class="muted">Disponible une fois l\u2019app reliée à Supabase.</p>':`<div class="row" style="align-items:flex-end"><label class="f" style="flex:2;min-width:200px">E-mail<input id="mem-email" type="email" inputmode="email" placeholder="prenom@exemple.fr"></label>
-    <label class="f" style="min-width:150px">Rôle<select id="mem-role"><option value="player">Joueur</option><option value="admin">Responsable</option></select></label><button class="btn primary" data-a="memadd">Ajouter</button></div>
-    <div class="roster" style="margin-top:12px">${(S.members||[]).map(m=>`<div class="r"><span class="nm">${esc(m.email)}${m.email===S.email?' <span class="muted small">(toi)</span>':''}<br><span class="muted small">${m.role==='admin'?'Responsable : gère tout':'Joueur : consulte et remplit son profil'}</span></span>
-      ${m.email===S.email?'':`<button class="btn sm ghost" data-a="memrole" data-v="${esc(m.email)}|${m.role==='admin'?'player':'admin'}">${m.role==='admin'?'Passer joueur':'Passer responsable'}</button><button class="btn sm ghost danger" data-a="memdel" data-v="${esc(m.email)}">Retirer</button>`}</div>`).join('')||'<p class="muted">Chargement de la liste…</p>'}</div>`}
+    <label class="f" style="min-width:150px">Rôle<select id="mem-role"><option value="player">Joueur</option><option value="coach">Coach</option><option value="admin">Responsable</option></select></label><button class="btn primary" data-a="memadd">Ajouter</button></div>
+    <div class="roster" style="margin-top:12px">${(S.members||[]).map(m=>`<div class="r"><span class="nm">${esc(m.email)}${m.email===S.email?' <span class="muted small">(toi)</span>':''}<br><span class="muted small">${m.role==='admin'?'Responsable : gère tout':m.role==='coach'?'Coach : note et évalue les joueurs':'Joueur : consulte et remplit son profil'}</span></span>
+      ${m.email===S.email?'':`<select data-memrole="${esc(m.email)}" aria-label="Rôle" style="border:1px solid var(--line);border-radius:8px;padding:6px 8px;background:var(--bg)">${[['player','Joueur'],['coach','Coach'],['admin','Responsable']].map(([v,l])=>`<option value="${v}" ${m.role===v?'selected':''}>${l}</option>`).join('')}</select><button class="btn sm ghost danger" data-a="memdel" data-v="${esc(m.email)}">Retirer</button>`}</div>`).join('')||'<p class="muted">Chargement de la liste…</p>'}</div>`}
   <p class="muted small" style="margin-top:8px">Un responsable gère les matchs, l\u2019effectif, les cotisations et les membres. Un joueur consulte tout sauf les cotisations, et ne modifie que son propre profil, son poids et ses données de montre.</p></section></div>`;
   return h;
 }
@@ -1608,6 +1713,11 @@ document.addEventListener('click', async e=>{
       if(await write('fees/'+k,f)) toast(raw===''?'Montant standard appliqué.':(parseNum(raw)===0?pname(player(pid))+' est exonéré.':'Montant dû mis à jour.')); break; }
     case 'logodel': if(!confirm('Retirer le logo du club ?')) return; { const c=Object.assign({},DEFAULTS,S.settings||{}); delete c.logo; c.logoUrl=''; await write('club/settings',c); render(); } break;
     case 'logourl': { const u=document.getElementById('logo-url').value.trim(); if(u&&!/^https:\/\/[^\s"'<>]+$/i.test(u)){ toast('Le lien doit commencer par https://'); return; } const c=Object.assign({},DEFAULTS,S.settings||{},{logoUrl:u}); if(u) delete c.logo; if(await write('club/settings',c)){ toast(u?'Logo mis à jour.':'Lien retiré.'); render(); } break; }
+    case 'evedit': S.evalMid=v; S.evalEdit=clone(evalsOf(v)); S.evalDirty=true; render(); break;
+    case 'evcancel': S.evalEdit=null; S.evalMid=null; S.evalDirty=false; render(); break;
+    case 'evtag': { const [pid,t]=v.split('|'); const e=S.evalEdit[pid]||(S.evalEdit[pid]={}); e.tags=e.tags||[]; const i=e.tags.indexOf(t); if(i>=0) e.tags.splice(i,1); else e.tags.push(t); b.setAttribute('aria-pressed',i<0); break; }
+    case 'evsave': { const out={}; for(const [pid,e] of Object.entries(S.evalEdit)){ const o={}; for(const [k] of EVAL_K){ const x=parseNum(e[k]); if(x!=null) o[k]=Math.max(0,Math.min(10,x)); } if((e.tags||[]).length) o.tags=e.tags; if((e.txt||'').trim()) o.txt=e.txt.trim().slice(0,300); if(Object.keys(o).length) out[pid]=o; }
+      if(await write('evals/'+v,{players:out,by:S.email||'',updatedAt:Date.now()})){ S.evalEdit=null; S.evalMid=null; S.evalDirty=false; toast('Évaluation enregistrée.'); render(); } break; }
     case 'sort': S.sort={k:v,dir:(S.sort&&S.sort.k===v)?-S.sort.dir:-1}; render(); break;
     case 'photodel': if(!confirm('Retirer la photo ?')) return;
       if(v==='me'){ const d=clone(S.prof||myProfile()); delete d.photo; delete d.id; d.height=parseNum(d.height); d.updatedAt=Date.now(); if(await write('profiles/'+S.uid,d)){ S.prof=null; S.profDirty=false; render(); } }
@@ -1651,6 +1761,7 @@ function bindInput(t){
     S.editDirty=true; refreshChecks(); return;
   }
   if(t.dataset.plf!=null&&S.plan){ S.plan[t.dataset.plf]=t.value; S.planDirty=true; return; }
+  if(t.dataset.ev!=null&&S.evalEdit){ const [pid,k]=t.dataset.ev.split('|'); (S.evalEdit[pid]||(S.evalEdit[pid]={}))[k]=t.value; return; }
   if(t.dataset.pf!=null&&S.prof){ S.prof[t.dataset.pf]=t.value; S.profDirty=true; return; }
   if(t.dataset.gf!=null&&S.prof){ const [mid,k]=t.dataset.gf.split(':'); S.prof.gps=S.prof.gps||{}; const g=S.prof.gps[mid]=S.prof.gps[mid]||{}; const v=parseNum(t.value); if(v==null) delete g[k]; else g[k]=v; S.profDirty=true; return; }
   if(t.dataset.sf!=null&&S.setDraft){ S.setDraft[t.dataset.sf]=t.value; S.setDirty=true; return; }
@@ -1729,7 +1840,7 @@ async function boot(session){
   S.uid=session.user.id; S.email=(session.user.email||'').toLowerCase();
   const {data:mem}=await sb.from('club_members').select('email,role').eq('email',S.email).maybeSingle();
   if(!mem){ S.auth='notmember'; render(); return; }
-  S.canEdit=mem.role==='admin';
+  S.canEdit=mem.role==='admin'; S.role=mem.role; S.canCoach=mem.role==='admin'||mem.role==='coach';
   await loadAll();
   if(!boot.sub){
     boot.sub=sb.channel('docs-club').on('postgres_changes',{event:'*',schema:'public',table:'docs'},pl=>{
@@ -1743,6 +1854,12 @@ async function boot(session){
   if(assigned&&(!mine||mine.playerId!==assigned.id)) write('profiles/'+S.uid,Object.assign({weights:[],gps:{}},mine?stripId(mine):{},{playerId:assigned.id,updatedAt:Date.now()}));
   S.auth='ok'; S.ready=true; render(); startPresence();
 }
+document.addEventListener('change', async e=>{
+  const t=e.target; if(t.dataset.memrole==null) return;
+  const email=t.dataset.memrole; if(email===S.email){ toast('Garde ton propre accès responsable.'); return; }
+  const {error}=await sb.from('club_members').update({role:t.value}).eq('email',email);
+  if(error) toast(error.code==='23514'?'Rôle Coach indisponible : exécute coach.sql dans Supabase.':errMsg(error)); else { toast('Rôle mis à jour.'); loadMembers(); }
+});
 document.addEventListener('click', async e=>{
   const b=e.target.closest('[data-a]'); if(!b) return;
   const a=b.dataset.a;
@@ -1777,7 +1894,7 @@ document.addEventListener('click', async e=>{
     const {error}=await sb.from('club_members').delete().eq('email',email);
     if(error) toast(errMsg(error)); else loadMembers();
   }
-  if(a==='memrole'){
+  if(a==='memrole__'){
     const [email,role]=b.dataset.v.split('|'); if(email===S.email){ toast('Garde au moins ton propre accès responsable.'); return; }
     const {error}=await sb.from('club_members').update({role}).eq('email',email);
     if(error) toast(errMsg(error)); else loadMembers();
