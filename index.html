@@ -282,6 +282,14 @@ input[type=range]{width:100%;accent-color:var(--bib);min-height:32px}
 .star .t4{font-size:.78rem;color:#C9C9D4;margin-top:4px}
 .star.side{display:none}
 @media (min-width:1420px){.star.side{display:block;position:fixed;right:20px;top:150px;width:180px;z-index:4}.star.inline{display:none}}
+.ev-pos{color:var(--win);display:block}.ev-neg{color:var(--loss);display:block}.ev-oth{display:block}
+.ev-negs .chip[aria-pressed="true"]{background:var(--loss);border-color:var(--loss);color:#FFFFFF}
+.star.has-img{min-height:400px;display:flex;flex-direction:column;justify-content:flex-end;padding-top:16px}
+.star .bgimg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:-2}
+.star.has-img::after{content:"";position:absolute;inset:auto 0 0 0;height:60%;background:linear-gradient(transparent,rgba(5,5,10,.92));z-index:-1}
+.star.has-img .fl{display:none}
+.star.has-img .aura{top:20px;mix-blend-mode:screen}
+.star.has-img .ph{margin:0 auto 10px}
 /* ===== Habillages : Classique (sombre sportif) et Arcade ===== */
 :root[data-skin="classic"]{--bg:#000000;--surface:#1C1C1E;--surface-2:#2C2C2E;--ink:#F5F5F7;--muted:#A1A1A6;--line:#38383A;--turf:#30D158;--turf-2:#28B04A;--on-turf:#04110B;--chalk:rgba(255,255,255,.07);--bib:#FF9F0A;--bib-soft:#3A2A12;--on-bib:#1A0E00;--win:#30D158;--draw:#FFD60A;--loss:#FF6961;--focus:#64D2FF;color-scheme:dark}
 [data-skin="classic"] body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",Inter,"Segoe UI",Roboto,sans-serif}
@@ -390,7 +398,7 @@ const S = {
   editing:null, editDirty:false, prof:null, profDirty:false, setDraft:null, setDirty:false,
   editPlayer:null, showArchived:false, plan:null, planDirty:false, feeSeason:null, feeOpen:null, fees:[], got:{s:0,p:0,m:0,pr:0,f:0}
 };
-const L = {settings:null,players:{},matches:{},profiles:{},fees:{},evals:{}};
+const L = {settings:null,players:{},matches:{},profiles:{},fees:{},evals:{},levels:{}};
 
 /* ---------- Utilitaires ---------- */
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -457,7 +465,7 @@ async function loadAll(){
     if(error){ toast("Impossible de charger les données du club."); break; }
     rows.push(...data); if(data.length<step) break;
   }
-  L.settings=null; L.players={}; L.matches={}; L.profiles={}; L.fees={}; L.evals={};
+  L.settings=null; L.players={}; L.matches={}; L.profiles={}; L.fees={}; L.evals={}; L.levels={};
   for(const r of rows) applyRow(r.col,r.id,r.data);
   syncLocal();
 }
@@ -472,7 +480,7 @@ function syncLocal(){
   S.matches=Object.entries(L.matches).map(([id,d])=>({id,...d})).sort(byDate);
   S.profiles=Object.entries(L.profiles).map(([id,d])=>({id,...d}));
   S.fees=Object.entries(L.fees).map(([id,d])=>({id,...d}));
-  S.evals=L.evals;
+  S.evals=L.evals; S.levels=L.levels;
   render(true);
 }
 const byDate=(a,b)=>(b.date||'').localeCompare(a.date||'');
@@ -926,7 +934,13 @@ function vFees(){
 
 /* ----- Effectif & fiche joueur ----- */
 /* ----- Coach : notes et appréciations ----- */
-const EVAL_TAGS=['Aspect défensif','Aspect offensif','Agressivité','Mouvements','Déchets techniques','Combinaisons','Éliminations','Pertes dangereuses','Gestion de l\u2019énergie'];
+const EVAL_POS=['Bonne défense','Offensif','Agressif','Mouvements et combinaisons proposés','Éliminations réussies','Ballons sécurisés','Bonne gestion de l\u2019énergie'];
+const EVAL_NEG=['Mauvaise défense','Pas assez offensif','Pas assez agressif','Pas de mouvement, pas de combinaison','Déchets techniques','Pertes dangereuses','Mauvaise gestion de l\u2019énergie'];
+function evalTxt(e){
+  const t=e.tags||[], pos=[...t.filter(x=>EVAL_POS.includes(x)),e.txtPos].filter(Boolean), neg=[...t.filter(x=>EVAL_NEG.includes(x)),e.txtNeg].filter(Boolean), oth=[...t.filter(x=>!EVAL_POS.includes(x)&&!EVAL_NEG.includes(x)),e.txt].filter(Boolean);
+  return (pos.length?`<span class="ev-pos">+ ${esc(pos.join(' · '))}</span>`:'')+(neg.length?`<span class="ev-neg">− ${esc(neg.join(' · '))}</span>`:'')+(oth.length?`<span class="ev-oth">${esc(oth.join(' · '))}</span>`:'');
+}
+const hasEvalTxt=e=>(e.tags||[]).length||e.txt||e.txtPos||e.txtNeg;
 const EVAL_K=[['off','Offensif'],['def','Défensif'],['mov','Mouvements / combinaisons']];
 function evalsOf(mid){ return ((S.evals||{})[mid]||{}).players||{}; }
 function vEvalBlock(m,rows){
@@ -936,22 +950,24 @@ function vEvalBlock(m,rows){
     return `<section class="panel"><div class="spread"><h3 style="margin:0">Évaluation du coach</h3><button class="btn ghost sm" data-a="evcancel">Annuler</button></div>
     ${rows.map(({pid})=>{ const e=d[pid]||{}; return `<div class="frow"><div class="top"><span class="nm">${esc(pname(player(pid)))}</span></div>
       <div class="mini">${EVAL_K.map(([k,l])=>`<label class="f">${l} /10<input inputmode="decimal" data-ev="${pid}|${k}" value="${esc(e[k]??'')}" placeholder="—"></label>`).join('')}</div>
-      <div class="chips" style="margin-top:8px">${EVAL_TAGS.map(t=>`<button class="chip" data-a="evtag" data-v="${pid}|${esc(t)}" aria-pressed="${(e.tags||[]).includes(t)}">${esc(t)}</button>`).join('')}</div>
-      <label class="f" style="margin-top:8px">Autre appréciation<input data-ev="${pid}|txt" value="${esc(e.txt||'')}" placeholder="Facultatif"></label></div>`; }).join('')}
+      <p class="sub ev-pos">Points positifs</p><div class="chips" style="margin-top:6px">${EVAL_POS.map(t=>`<button class="chip" data-a="evtag" data-v="${pid}|${esc(t)}" aria-pressed="${(e.tags||[]).includes(t)}">${esc(t)}</button>`).join('')}</div>
+      <label class="f" style="margin-top:8px">Autre point positif<input data-ev="${pid}|txtPos" value="${esc(e.txtPos||'')}" placeholder="Facultatif"></label>
+      <p class="sub ev-neg">Points à travailler</p><div class="chips ev-negs" style="margin-top:6px">${EVAL_NEG.map(t=>`<button class="chip" data-a="evtag" data-v="${pid}|${esc(t)}" aria-pressed="${(e.tags||[]).includes(t)}">${esc(t)}</button>`).join('')}</div>
+      <label class="f" style="margin-top:8px">Autre point négatif<input data-ev="${pid}|txtNeg" value="${esc(e.txtNeg||'')}" placeholder="Facultatif"></label></div>`; }).join('')}
     <div class="row" style="margin-top:12px"><button class="btn primary" data-a="evsave" data-v="${m.id}">Enregistrer l\u2019évaluation</button></div></section>`;
   }
   const ids=Object.keys(ev).filter(pid=>player(pid));
   if(!ids.length&&!S.canCoach) return '';
   return `<section class="panel"><div class="spread"><h3 style="margin:0">Évaluation du coach</h3>${S.canCoach?`<button class="btn sm" data-a="evedit" data-v="${m.id}">${ids.length?'Modifier':'Évaluer les joueurs'}</button>`:''}</div>
-  ${ids.length?`<div class="tw" style="margin-top:8px"><table><thead><tr><th>Joueur</th><th>Off.</th><th>Déf.</th><th>Mouv.</th><th style="text-align:left">Appréciations</th></tr></thead><tbody>${ids.map(pid=>{const e=ev[pid];return `<tr><td>${esc(pname(player(pid)))}</td>${EVAL_K.map(([k])=>`<td>${nf(e[k],1)}</td>`).join('')}<td style="text-align:left;white-space:normal;min-width:160px">${esc([...(e.tags||[]),e.txt].filter(Boolean).join(' · '))}</td></tr>`;}).join('')}</tbody></table></div>`:'<p class="muted small">Pas encore d\u2019évaluation pour ce match.</p>'}</section>`;
+  ${ids.length?`<div class="tw" style="margin-top:8px"><table><thead><tr><th>Joueur</th><th>Off.</th><th>Déf.</th><th>Mouv.</th><th style="text-align:left">Appréciations</th></tr></thead><tbody>${ids.map(pid=>{const e=ev[pid];return `<tr><td>${esc(pname(player(pid)))}</td>${EVAL_K.map(([k])=>`<td>${nf(e[k],1)}</td>`).join('')}<td style="text-align:left;white-space:normal;min-width:180px">${evalTxt(e)}</td></tr>`;}).join('')}</tbody></table></div>`:'<p class="muted small">Pas encore d\u2019évaluation pour ce match.</p>'}</section>`;
 }
 function coachBlock(pid,ms){
   const list=ms.map(m=>({m,e:evalsOf(m.id)[pid]})).filter(x=>x.e);
   if(!list.length) return '';
   const av=k=>{ const v=list.map(x=>x.e[k]).filter(isNum); return v.length?v.reduce((a,b)=>a+b,0)/v.length:null; };
-  const notes=list.filter(x=>(x.e.tags||[]).length||x.e.txt).slice(0,4);
+  const notes=list.filter(x=>hasEvalTxt(x.e)).slice(0,4);
   return `<section class="panel"><h3>Avis du coach</h3><div class="kpis">${EVAL_K.map(([k,l])=>`<div class="kpi"><div class="v">${av(k)!=null?nf(av(k),1):'—'}</div><div class="l">${l}</div></div>`).join('')}</div>
-  ${notes.length?`<div class="roster" style="margin-top:10px">${notes.map(x=>`<div class="r"><span class="nm"><b>${fdate(x.m.date,{day:'numeric',month:'short'})}</b> · ${esc([...(x.e.tags||[]),x.e.txt].filter(Boolean).join(' · '))}</span></div>`).join('')}</div>`:''}
+  ${notes.length?`<div class="roster" style="margin-top:10px">${notes.map(x=>`<div class="r"><span class="nm"><b>${fdate(x.m.date,{day:'numeric',month:'short'})}</b><br>${evalTxt(x.e)}</span></div>`).join('')}</div>`:''}
   <p class="muted small">Moyennes sur ${list.length} match(s) évalué(s).</p></section>`;
 }
 
@@ -989,14 +1005,16 @@ function starCard(cls){
   const s=starInfo(); if(!s) return '';
   const L=LV[s.lvl], p=player(s.pid);
   let sp=''; if(L.ui) for(let k=0;k<12;k++) sp+=`<circle class="spark" cx="${(k*47%140)-70}" cy="${40+(k*29%60)}" r="${1+k%3*0.6}" fill="#FFFFFF" style="animation-delay:${(k*0.27).toFixed(2)}s"/>`;
-  return `<aside class="star ${cls}" style="--c1:${L.c1};--c2:${L.c2};--spd:${L.spd}" aria-label="Meilleur buteur : ${esc(pname(p))}, ${esc(L.n)}">
+  const bg=((S.levels||{})[s.lvl]||{}).img, okbg=bg&&/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(bg);
+  return `<aside class="star ${cls}${okbg?' has-img':''}" style="--c1:${L.c1};--c2:${L.c2};--spd:${L.spd}" aria-label="Meilleur buteur : ${esc(pname(p))}, ${esc(L.n)}">
+    ${okbg?`<img class="bgimg" src="${bg}" alt="">`:''}
     <svg class="aura" viewBox="-110 -170 220 300" aria-hidden="true">
       <ellipse class="glow" cx="0" cy="-20" rx="66" ry="80" fill="${L.c1}" opacity=".25"/>
       <path class="fl" d="${auraPath(L.len,1)}" fill="${L.c1}" opacity=".7"/>
       <path class="fl fl2" d="${auraPath(L.len*0.85,4)}" fill="${L.c2}" opacity=".55"/>
       ${arcsSvg(L.arcs)}${sp}
     </svg>
-    <div class="ph">${avatar(s.pid,84)}</div>
+    <div class="ph">${avatar(s.pid,okbg?56:84)}</div>
     <div class="t1">Meilleur buteur</div>
     <button class="link t2" data-a="player" data-v="${s.pid}">${esc(pname(p))}</button>
     <div class="t3">Niveau ${s.lvl} · ${esc(L.n)}</div>
@@ -1078,7 +1096,7 @@ function physique(pid,a,ms,isMe){
   return h;
 }
 
-async function logoFromFile(file){
+async function logoFromFile(file,o){
   let blob=file;
   const heic=/heic|heif/i.test(file.type)||/\.(heic|heif)$/i.test(file.name);
   const load=b=>new Promise((res,rej)=>{ const u=URL.createObjectURL(b), i=new Image(); i.onload=()=>{ URL.revokeObjectURL(u); res(i); }; i.onerror=e=>{ URL.revokeObjectURL(u); rej(e); }; i.src=u; });
@@ -1090,7 +1108,9 @@ async function logoFromFile(file){
     blob=await window.heic2any({blob:file,toType:'image/png'}); if(Array.isArray(blob)) blob=blob[0];
     img=await load(blob);
   }
-  const sz=256, c=document.createElement('canvas'); c.width=c.height=sz; const k=Math.min(sz/img.naturalWidth,sz/img.naturalHeight);
+  const c=document.createElement('canvas');
+  if(o){ const k=Math.min(1,o.w/img.naturalWidth,o.h/img.naturalHeight); c.width=Math.round(img.naturalWidth*k); c.height=Math.round(img.naturalHeight*k); c.getContext('2d').drawImage(img,0,0,c.width,c.height); return c.toDataURL('image/jpeg',0.8); }
+  const sz=256; c.width=c.height=sz; const k=Math.min(sz/img.naturalWidth,sz/img.naturalHeight);
   const w=img.naturalWidth*k, h=img.naturalHeight*k; c.getContext('2d').drawImage(img,(sz-w)/2,(sz-h)/2,w,h);
   return c.toDataURL('image/png');
 }
@@ -1273,6 +1293,8 @@ function vSettings(){
     <label class="f">Début de saison<select data-sf="seasonStartMonth">${months.map((m,i)=>`<option value="${i+1}" ${+d.seasonStartMonth===i+1?'selected':''}>${m}</option>`).join('')}</select></label>
     <label class="f" style="grid-column:1/-1">Lien du championnat<input type="url" inputmode="url" data-sf="leagueUrl" value="${esc(d.leagueUrl||'')}" placeholder="https://myurban.fr/"></label>
   </div><div class="row" style="margin-top:12px"><button class="btn primary" data-a="setsave">Enregistrer</button></div></section>
+  <section class="panel"><h3>Visuels du bandeau meilleur buteur</h3><p class="muted small" style="margin-top:-6px">Une image par niveau, affichée en fond du bandeau avec les éclairs animés par-dessus. Sans image, l\u2019aura par défaut s\u2019affiche.</p>
+  <div class="roster">${[1,2,3,4].map(n=>{const im=((S.levels||{})[n]||{}).img;return `<div class="r">${im?`<img src="${im}" alt="" style="width:42px;height:56px;object-fit:cover;border-radius:6px">`:'<span style="width:42px;height:56px;border-radius:6px;background:var(--surface-2);display:inline-block"></span>'}<span class="nm"><b>Niveau ${n}</b><br><span class="muted small">${esc(LV[n].n)}</span></span><label class="btn sm">${im?'Changer':'Ajouter'}<input type="file" accept="image/*,.heic,.heif" data-lvl="${n}" hidden></label>${im?`<button class="btn sm ghost" data-a="lvldel" data-v="${n}">Retirer</button>`:''}</div>`;}).join('')}</div></section>
   <section class="panel"><div class="spread"><h3 style="margin:0">Indicateurs suivis</h3><div class="row"><button class="btn sm" data-a="kpreset" data-v="ess">Essentiels</button><button class="btn sm" data-a="kpreset" data-v="all">Tout activer</button></div></div>
   <p class="muted small">Seuls les indicateurs activés apparaissent dans la saisie et les tableaux. En désactiver un ne supprime aucune donnée.</p>
   ${Object.entries(GROUPS).map(([g,l])=>`<p class="sub">${l}</p><div class="toggles" style="margin-top:6px">${KPIS.filter(x=>x.g===g).map(x=>`<button class="kt" data-a="kpi" data-v="${x.k}" aria-pressed="${on(x.k)}"><i></i>${esc(x.l)}${x.def?'<small>essentiel</small>':''}</button>`).join('')}</div>`).join('')}</section>`;
@@ -1716,8 +1738,9 @@ document.addEventListener('click', async e=>{
     case 'evedit': S.evalMid=v; S.evalEdit=clone(evalsOf(v)); S.evalDirty=true; render(); break;
     case 'evcancel': S.evalEdit=null; S.evalMid=null; S.evalDirty=false; render(); break;
     case 'evtag': { const [pid,t]=v.split('|'); const e=S.evalEdit[pid]||(S.evalEdit[pid]={}); e.tags=e.tags||[]; const i=e.tags.indexOf(t); if(i>=0) e.tags.splice(i,1); else e.tags.push(t); b.setAttribute('aria-pressed',i<0); break; }
-    case 'evsave': { const out={}; for(const [pid,e] of Object.entries(S.evalEdit)){ const o={}; for(const [k] of EVAL_K){ const x=parseNum(e[k]); if(x!=null) o[k]=Math.max(0,Math.min(10,x)); } if((e.tags||[]).length) o.tags=e.tags; if((e.txt||'').trim()) o.txt=e.txt.trim().slice(0,300); if(Object.keys(o).length) out[pid]=o; }
+    case 'evsave': { const out={}; for(const [pid,e] of Object.entries(S.evalEdit)){ const o={}; for(const [k] of EVAL_K){ const x=parseNum(e[k]); if(x!=null) o[k]=Math.max(0,Math.min(10,x)); } if((e.tags||[]).length) o.tags=e.tags; for(const k of ['txt','txtPos','txtNeg']) if((e[k]||'').trim()) o[k]=e[k].trim().slice(0,300); if(Object.keys(o).length) out[pid]=o; }
       if(await write('evals/'+v,{players:out,by:S.email||'',updatedAt:Date.now()})){ S.evalEdit=null; S.evalMid=null; S.evalDirty=false; toast('Évaluation enregistrée.'); render(); } break; }
+    case 'lvldel': if(confirm('Revenir à l\u2019aura par défaut pour ce niveau ?')){ await remove('levels/'+v); render(); } break;
     case 'sort': S.sort={k:v,dir:(S.sort&&S.sort.k===v)?-S.sort.dir:-1}; render(); break;
     case 'photodel': if(!confirm('Retirer la photo ?')) return;
       if(v==='me'){ const d=clone(S.prof||myProfile()); delete d.photo; delete d.id; d.height=parseNum(d.height); d.updatedAt=Date.now(); if(await write('profiles/'+S.uid,d)){ S.prof=null; S.profDirty=false; render(); } }
@@ -1730,6 +1753,9 @@ document.addEventListener('change', async e=>{
   const t=e.target;
   if(t.dataset.a==='fperiod'){ S.filter.period=t.value; render(); return; }
   if(t.dataset.a==='feeseason'){ S.feeSeason=t.value; S.feeOpen=null; render(); return; }
+  if(t.dataset.lvl){ const f=t.files&&t.files[0]; t.value=''; if(!f) return;
+    let data; try{ data=await logoFromFile(f,{w:420,h:560}); }catch(err){ toast('Impossible de lire cette image. Formats acceptés : JPG, PNG, WebP, HEIC.'); return; }
+    if(await write('levels/'+t.dataset.lvl,{img:data})){ toast('Visuel du niveau '+t.dataset.lvl+' enregistré.'); render(); } return; }
   if(t.dataset.logo){ const f=t.files&&t.files[0]; t.value=''; if(!f) return;
     let data; try{ data=await logoFromFile(f); }catch(err){ toast('Impossible de lire cette image. Formats acceptés : JPG, PNG, WebP, HEIC.'); return; }
     const c=Object.assign({},DEFAULTS,S.settings||{},{logo:data,logoUrl:''}); if(await write('club/settings',c)){ toast('Logo enregistré.'); render(); } return; }
