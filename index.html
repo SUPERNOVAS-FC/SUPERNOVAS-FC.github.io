@@ -332,6 +332,7 @@ input[type=range]{width:100%;accent-color:var(--bib);min-height:32px}
 [data-skin="arcade"] .st-table td.on{color:#FFE14D}
 [data-skin] nav.bottom button[aria-current="page"],[data-skin] nav.tabs button[aria-current="page"]{color:var(--turf)}
 [data-skin] .dot{color:#0A0A0A}
+.clips{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}.clip video{width:100%;border-radius:12px;background:#000;aspect-ratio:16/9}.clip .spread{margin-top:6px;gap:6px}.yt{width:100%;aspect-ratio:16/9;border:0;border-radius:12px;background:#000}
 </style>
 </head>
 <body>
@@ -735,6 +736,7 @@ function vMatch(){
   let h=`<div class="stack"><div class="spread"><button class="btn ghost" data-a="back">‹ Matchs</button>
     ${S.canEdit?`<div class="row"><button class="btn" data-a="editmatch" data-v="${m.id}">Modifier</button><button class="btn danger" data-a="delmatch" data-v="${m.id}">Supprimer</button></div>`:''}</div>`;
   h+=vBoard(m);
+  h+=vVideoBlock(m);
   h+=`<section class="panel"><h3>Feuille de match</h3>${rows.length?`<div class="tw"><table><thead><tr><th>Joueur</th><th>Min</th><th>Poids</th>${cols.map(d=>`<th title="${esc(d.l)}">${esc(d.s)}</th>`).join('')}</tr></thead><tbody>
     ${rows.map(({pid,r})=>{const w=weightAt(pid,m.date);return `<tr><td><button class="link" data-a="player" data-v="${pid}">${esc(pname(player(pid)))}</button>${r.gk?' <span class="muted small">(G)</span>':''}${m.motm===pid?' <span title="Homme du match">★</span>':''}</td><td>${nf(r.min)}</td><td>${w?nf(w.kg,1)+' kg':'—'}</td>${cols.map(d=>`<td>${nf(r[d.k],d.dec||d.rating?1:0)}</td>`).join('')}</tr>`;}).join('')}</tbody></table></div>`:'<p class="muted">Aucun joueur saisi sur ce match.</p>'}</section>`;
   const kms=rows.filter(x=>isNum(x.r.km)).sort((x,y)=>y.r.km-x.r.km);
@@ -743,6 +745,54 @@ function vMatch(){
   if(gks.length&&gcols.length) h+=`<section class="panel"><h3>Gardiens</h3><div class="tw"><table><thead><tr><th>Gardien</th><th>Min dans les buts</th>${gcols.map(d=>`<th>${esc(d.s)}</th>`).join('')}<th>% arrêts</th></tr></thead><tbody>
     ${gks.map(({pid,r})=>`<tr><td>${esc(pname(player(pid)))}</td><td>${nf(r.gkMin)}</td>${gcols.map(d=>`<td>${nf(r[d.k])}</td>`).join('')}<td>${pct(r.saves||0,(r.saves||0)+(r.conceded||0))}</td></tr>`).join('')}</tbody></table></div></section>`;
   return h+'</div>';
+}
+
+/* ----- Vidéo du match & extraits de buts ----- */
+function ytId(u){ const m=String(u||'').match(/^https:\/\/(?:www\.|m\.)?(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|live\/|shorts\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/); return m?m[1]:null; }
+function clipUrlOk(u){ return typeof u==='string'&&u.startsWith(String(SUPABASE_URL).trim().replace(/\/rest\/v1\/?$/,'').replace(/\/$/,'')+'/storage/v1/object/public/clips/'); }
+function clipCard(m,c,showWho){
+  const who=showWho?`<button class="link pl" data-a="player" data-v="${c.pid}">${avatar(c.pid,22)}<span>${esc(shortName(player(c.pid)))}</span></button>`:`<button class="link" data-a="match" data-v="${m.id}">${esc(m.opponent||'Match')} · ${esc(m.date)}</button>`;
+  return `<div class="clip">${clipUrlOk(c.url)?`<video controls preload="metadata" playsinline src="${esc(c.url)}"></video>`:'<p class="muted small">Extrait indisponible.</p>'}
+    <div class="spread small">${who}<span class="muted">${isNum(c.min)?c.min+'’':''}</span>${S.canEdit?`<button class="btn sm danger" data-a="delclip" data-v="${m.id}|${c.id}" aria-label="Supprimer l’extrait">×</button>`:''}</div></div>`;
+}
+function vVideoBlock(m){
+  const id=ytId(m.videoUrl), clips=(m.clips||[]).slice().sort((a,b)=>(a.min||0)-(b.min||0));
+  if(!id&&!clips.length&&!S.canEdit) return '';
+  const ps=Object.keys(m.stats||{}).map(pid=>player(pid)).filter(Boolean);
+  let h=`<section class="panel"><h3>Vidéo du match</h3>`;
+  h+=id?`<iframe class="yt" src="https://www.youtube-nocookie.com/embed/${id}" title="Vidéo du match" loading="lazy" allow="fullscreen; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`
+       :`<p class="muted">${m.videoUrl?'Lien non reconnu : utilise un lien YouTube (youtube.com ou youtu.be).':'Pas encore de vidéo.'}${S.canEdit?' Ajoute le lien YouTube via « Modifier ».':''}</p>`;
+  if(clips.length) h+=`<h3 style="margin-top:16px">Buts</h3><div class="clips">${clips.map(c=>clipCard(m,c,true)).join('')}</div>`;
+  if(S.canEdit&&!S.local) h+=`<details style="margin-top:14px"><summary class="btn ghost sm">Ajouter un extrait de but</summary><div class="fields" style="margin-top:10px">
+    <label class="f">Buteur<select id="clip-p">${ps.map(p=>`<option value="${p.id}">${esc(pname(p))}</option>`).join('')}</select></label>
+    <label class="f">Minute<input id="clip-min" inputmode="numeric" placeholder="ex. 12"></label>
+    <label class="f">Fichier MP4 (50 Mo max)<input id="clip-file" type="file" accept="video/mp4"></label></div>
+    <button class="btn" data-a="addclip" data-v="${m.id}">Enregistrer l’extrait</button></details>`;
+  return h+'</section>';
+}
+function vGoalClips(pid){
+  const L=[]; for(const m of S.matches) for(const c of (m.clips||[])) if(c.pid===pid&&clipUrlOk(c.url)) L.push({m,c});
+  L.sort((a,b)=>String(b.m.date).localeCompare(String(a.m.date))||(a.c.min||0)-(b.c.min||0));
+  if(!L.length) return '';
+  return `<section class="panel"><h3>Buts en vidéo (${L.length})</h3><div class="clips">${L.map(({m,c})=>clipCard(m,c,false)).join('')}</div></section>`;
+}
+async function addClip(mid){
+  const m=S.matches.find(x=>x.id===mid), f=document.getElementById('clip-file').files[0], pid=document.getElementById('clip-p').value;
+  if(!m||!f||!pid){ toast('Choisis le buteur et le fichier MP4.'); return; }
+  if(f.type!=='video/mp4'||f.size>50*1024*1024){ toast('Fichier MP4 de 50 Mo maximum.'); return; }
+  const cid=rid(), path=`${mid}/${cid}.mp4`;
+  toast('Envoi en cours…');
+  const {error}=await sb.storage.from('clips').upload(path,f,{contentType:'video/mp4',upsert:false});
+  if(error){ toast('Envoi impossible : '+error.message+' (as-tu exécuté clips.sql ?)'); return; }
+  const url=sb.storage.from('clips').getPublicUrl(path).data.publicUrl;
+  const d=stripId(m); d.clips=(d.clips||[]).concat([{id:cid,pid,min:parseNum(document.getElementById('clip-min').value),url,path,at:Date.now()}]);
+  if(await write('matches/'+mid,d)){ toast('Extrait enregistré.'); render(); }
+}
+async function delClip(v){
+  const [mid,cid]=v.split('|'), m=S.matches.find(x=>x.id===mid), c=m&&(m.clips||[]).find(x=>x.id===cid);
+  if(!c||!confirm('Supprimer cet extrait ?')) return;
+  if(c.path&&sb) await sb.storage.from('clips').remove([c.path]);
+  const d=stripId(m); d.clips=d.clips.filter(x=>x.id!==cid); if(await write('matches/'+mid,d)){ toast('Extrait supprimé.'); render(); }
 }
 
 /* ----- Saisie de match ----- */
@@ -765,6 +815,7 @@ function vEditor(){
     <label class="f">Type<select data-ef="type">${Object.entries(TYPES).map(([k,l])=>`<option value="${k}" ${d.type===k?'selected':''}>${l}</option>`).join('')}</select></label>
     <label class="f">Lieu<input data-ef="place" value="${esc(d.place||'')}" placeholder="Facultatif"></label>
     <label class="f">Durée (min)<input inputmode="numeric" data-ef="duration" value="${esc(d.duration)}"></label>
+    <label class="f">Vidéo YouTube du match<input type="url" data-ef="videoUrl" value="${esc(d.videoUrl||'')}" placeholder="https://youtu.be/… (facultatif)"></label>
   </div>
   <div class="steps" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr))">${stepper('_m','scoreFor','Buts marqués',d.scoreFor)}${stepper('_m','scoreAgainst','Buts encaissés',d.scoreAgainst)}</div>
   <div class="fields" style="margin-top:12px"><label class="f">Homme du match<select data-ef="motm"><option value="">${Object.values(d.stats).some(r=>r.present)?'Choisir un joueur':'Coche d\u2019abord les présents'}</option>${Object.entries(d.stats).filter(([,r])=>r.present).map(([pid])=>`<option value="${pid}" ${d.motm===pid?'selected':''}>${esc(pname(player(pid)))}</option>`).join('')}</select></label></div></section>
@@ -821,7 +872,7 @@ async function saveMatch(){
     for(const x of KPIS) if(isNum(r[x.k])) o[x.k]=r[x.k];
     stats[pid]=o;
   }
-  const data={date:d.date,time:d.time||'',convoc:d.convoc||null,motm:(d.motm&&stats[d.motm])?d.motm:null,opponent:(d.opponent||'').trim(),type:d.type,place:(d.place||'').trim(),scoreFor:d.scoreFor,scoreAgainst:d.scoreAgainst,duration:parseNum(d.duration)||cfg().matchLength,stats,updatedAt:Date.now()};
+  const data={date:d.date,time:d.time||'',convoc:d.convoc||null,motm:(d.motm&&stats[d.motm])?d.motm:null,opponent:(d.opponent||'').trim(),type:d.type,place:(d.place||'').trim(),scoreFor:d.scoreFor,scoreAgainst:d.scoreAgainst,duration:parseNum(d.duration)||cfg().matchLength,stats,videoUrl:(d.videoUrl||'').trim(),clips:d.clips||[],updatedAt:Date.now()};
   const id=d.id;
   if(await write('matches/'+id,data)){ S.editing=null; S.editDirty=false; S.matchId=id; toast('Match enregistré.'); go('m-'+id); render(); }
 }
@@ -1181,6 +1232,7 @@ function playerDetail(pid,ms){
   h+=physique(p.id,a,ms,isMe);
   h+=`<section class="panel"><div class="spread"><h3>Poids</h3>${lw?`<span class="muted small">${ws.length} pesée(s)</span>`:''}</div>${lineChart(ws,a.rows.map(x=>x.m.date))}<p class="muted small">Les traits en bas marquent les matchs : le poids retenu pour chaque performance est la dernière pesée connue à cette date.</p>
     ${(S.canEdit&&!profileOf(p.id))?`<div class="row" style="margin-top:8px"><label class="f" style="max-width:150px">Date<input type="date" id="pwd" value="${today()}"></label><label class="f" style="max-width:120px">Poids (kg)<input id="pwk" inputmode="decimal" placeholder="75,5"></label><button class="btn" style="align-self:end" data-a="pweight" data-v="${p.id}">Ajouter la pesée</button></div><p class="muted small">Ce joueur n\u2019a pas encore de compte rattaché : tu peux saisir son poids à sa place.</p>`:''}</section>`;
+  h+=vGoalClips(p.id);
   if(a.n){
     const cols=['goals','assists','shots','shotsOn','recoveries','rating','km'].filter(on).map(k=>KMAP[k]);
     h+=`<section class="panel"><h3>Historique des matchs</h3><div class="tw"><table><thead><tr><th>Match</th><th>Rés.</th><th>Min</th><th>Poids</th>${cols.map(d=>`<th title="${esc(d.l)}">${esc(d.s)}</th>`).join('')}${a.gkN?'<th>G : arrêts / enc.</th>':''}</tr></thead><tbody>
@@ -1681,6 +1733,8 @@ document.addEventListener('click', async e=>{
     case 'delmatch': if(confirm('Supprimer définitivement ce match et toutes ses statistiques ?')){ if(await remove('matches/'+v)){ toast('Match supprimé.'); nav('matchs'); } } break;
     case 'edcancel': if(S.editDirty&&!confirm('Abandonner la saisie de ce match ?')) return; S.editing=null; S.editDirty=false; render(); break;
     case 'edsave': saveMatch(); break;
+    case 'addclip': addClip(v); break;
+    case 'delclip': delClip(v); break;
     case 'edpres': { const d=S.editing; const r=d.stats[v]||(d.stats[v]={}); r.present=!r.present; if(r.present&&r.min==null) r.min=parseNum(d.duration)||cfg().matchLength; if(r.present&&r.gk==null&&(player(v)||{}).position==='gardien'){ r.gk=true; r.gkMin=r.min; } S.editDirty=true; render(); break; }
     case 'edgk': { const r=S.editing.stats[v]; r.gk=!r.gk; if(r.gk&&r.gkMin==null) r.gkMin=r.min; S.editDirty=true; render(); break; }
     case 'step': step(b.dataset.p,b.dataset.k,+b.dataset.d); break;
