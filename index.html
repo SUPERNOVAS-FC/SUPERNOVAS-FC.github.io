@@ -707,7 +707,7 @@ function vDashboard(){
 }
 
 function vMatches(){
-  let h=`<div class="stack"><div class="spread"><h2>Matchs</h2>${S.canEdit&&S.players.length?'<div class="row"><button class="btn" data-a="newplan">Prévoir un match</button><button class="btn primary" data-a="newmatch">+ Saisir un match joué</button></div>':''}</div>`;
+  let h=`<div class="stack"><div class="spread"><h2>Matchs</h2>${S.canEdit&&S.players.length?'<div class="row"><label class="btn" title="Choisis import_site.json et les extraits MP4 du dossier extraits_pour_le_site">Importer une analyse vidéo<input type="file" multiple accept=".json,application/json,video/mp4" data-impa="1" hidden></label><button class="btn" data-a="newplan">Prévoir un match</button><button class="btn primary" data-a="newmatch">+ Saisir un match joué</button></div>':''}</div>`;
   h+=leagueLink();
   const up=upcoming();
   if(up.length) h+=`<section><h3 style="margin-bottom:8px">À venir</h3><div class="mlist">${up.map(m=>{const c=convCounts(m);return `<button class="mrow" data-a="match" data-v="${m.id}">
@@ -795,6 +795,82 @@ async function delClip(v){
   const d=stripId(m); d.clips=d.clips.filter(x=>x.id!==cid); if(await write('matches/'+mid,d)){ toast('Extrait supprimé.'); render(); }
 }
 
+/* ----- Import d'une analyse vidéo (import_site.json écrit par match.py) ----- */
+function normNom(s){ return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim(); }
+function findByName(n){
+  const k=normNom(n); if(!k) return null;
+  const pick=L=>{ if(L.length>1) L=L.filter(p=>p.active!==false); return L.length===1?L[0]:null; };
+  return pick(S.players.filter(p=>normNom(p.name)===k))||pick(S.players.filter(p=>normNom(p.name).split(' ')[0]===k));
+}
+function impNum(v,max){ return (typeof v==='number'&&isFinite(v)&&v>=0&&v<=max)?Math.round(v):null; }
+function impTxt(v,n){ return typeof v==='string'?v.trim().slice(0,n||80):''; }
+async function importAnalyse(files){
+  const jf=files.find(f=>/\.json$/i.test(f.name)); if(!jf){ toast('Choisis le fichier import_site.json (et les extraits MP4 si tu veux les envoyer).'); return; }
+  let J; try{ if(jf.size>2e6) throw 0; J=JSON.parse(await jf.text()); }catch(e){ toast('Fichier illisible : choisis import_site.json produit par 2_bilan_match.bat.'); return; }
+  if(!J||J.format!=='supernovas-match-1'||!J.match||!Array.isArray(J.joueurs)){ toast('Ce fichier n’est pas un import d’analyse vidéo Supernovas.'); return; }
+  const M=J.match, date=impTxt(M.date,10);
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)){ toast('Date du match invalide dans le fichier ('+date+').'); return; }
+  if(!leaveGuard()) return;
+  const opp=impTxt(M.opponent,60);
+  // match déjà prévu (convocation) ou déjà saisi le même jour : on le complète au lieu d'en créer un second
+  const same=S.matches.filter(m=>m.date===date), plan=same.find(m=>m.planned), done=same.find(m=>!m.planned&&normNom(m.opponent)===normNom(opp));
+  let base=plan||null;
+  if(done&&confirm(`Un match contre ${done.opponent||'cet adversaire'} existe déjà le ${date}. Le remplacer par cette analyse ? (Annuler = créer un nouveau match)`)) base=done;
+  const dur=impNum(M.duration,200)||cfg().matchLength, stats={}, unknown=[];
+  for(const j of J.joueurs.slice(0,40)){
+    const nom=impTxt(j&&j.nom,40); if(!nom) continue;
+    const r={present:true,min:impNum(j.min,200)??dur};
+    for(const k of ['goals','assists','shots','shotsOn']){ const v=impNum(j[k],99); if(v!=null) r[k]=v; }
+    if(j.gk===true){ r.gk=true; r.gkMin=impNum(j.gkMin,200)??r.min; for(const k of ['saves','conceded']){ const v=impNum(j[k],99); if(v!=null) r[k]=v; } }
+    const p=findByName(nom); if(p&&!stats[p.id]) stats[p.id]=r; else unknown.push({nom,r});
+  }
+  const mp4=files.filter(f=>/\.mp4$/i.test(f.name)), clips=[], avert=(Array.isArray(J.avertissements)?J.avertissements:[]).slice(0,30).map(x=>impTxt(x,200)).filter(Boolean);
+  for(const b of (Array.isArray(J.buts)?J.buts:[]).slice(0,40)){
+    if(!b||b.nous!==true) continue;
+    const ex=impTxt(b.extrait,60), f=ex?mp4.find(x=>x.name===ex):null, nom=impTxt(b.buteur,40), min=impNum(b.minute,200);
+    if(ex&&!f) avert.push(`Extrait ${ex} (but de ${nom||'?'}${min?' à '+min+'’':''}) non choisi : il ne sera pas envoyé.`);
+    if(f) clips.push({nom,min,file:f,ex});
+  }
+  const type=TYPES[M.type]?M.type:((base&&base.type)||'championnat'), vurl=impTxt(M.videoUrl,200);
+  S.view='matchs'; S.matchId=null;
+  S.editing={id:base?base.id:rid(),date,time:(base&&base.time)||impTxt(M.time,5),opponent:opp||(base&&base.opponent)||'',type,place:impTxt(M.place,80)||(base&&base.place)||'',
+    scoreFor:impNum(M.scoreFor,99)??0,scoreAgainst:impNum(M.scoreAgainst,99)??0,duration:dur,stats,convoc:(base&&base.convoc)||{},motm:null,videoUrl:vurl||(base&&base.videoUrl)||'',clips:(base&&base.clips)||[],_new:!base,
+    _imp:{unknown,clips,avert,maillot:impTxt(M.maillot,30),absents:plan?Object.entries(plan.convoc||{}).filter(([pid,st])=>st==='oui'&&player(pid)&&!stats[pid]).map(([pid])=>pname(player(pid))):[]}};
+  S.editDirty=true; go('matchs'); render(); window.scrollTo(0,0);
+  toast(`Analyse chargée : ${Object.keys(stats).length} joueur(s) reconnu(s)${unknown.length?', '+unknown.length+' à associer':''}. Vérifie puis enregistre.`);
+}
+function vImportPanel(d){
+  const I=d._imp; if(!I) return '';
+  const opts=players(false).filter(p=>!(d.stats[p.id]&&d.stats[p.id].present)).map(p=>`<option value="${p.id}">${esc(pname(p))}</option>`).join('');
+  let h=`<section class="panel" style="border:2px solid var(--turf)"><h3>Analyse vidéo importée</h3><p class="muted small">Vérifie la feuille ci-dessous (tu peux tout corriger), puis clique sur « Enregistrer le match ».${I.clips.length?` Les ${I.clips.length} extrait(s) de buts seront envoyés à ce moment-là.`:''}${I.maillot?' Maillot du jour : '+esc(I.maillot)+'.':''}</p>`;
+  if(I.unknown.length) h+=`<p class="sub">Prénoms non reconnus dans l’effectif</p>${I.unknown.map((u,i)=>`<div class="row" style="align-items:center;margin:6px 0"><b style="min-width:110px">${esc(u.nom)}</b><span class="muted small">${u.r.min} min${u.r.goals?', '+u.r.goals+' but(s)':''}</span>
+    <select data-impmap="${i}" aria-label="Associer ${esc(u.nom)} à un joueur"><option value="">Associer à…</option>${opts}</select><button class="btn sm" data-a="impnew" data-v="${i}">Créer la fiche « ${esc(u.nom)} »</button></div>`).join('')}`;
+  if(I.absents.length) h+=`<p class="small warn">Convoqués présents mais absents de l’analyse : ${esc(I.absents.join(', '))}. Coche-les plus bas s’ils ont joué.</p>`;
+  if(I.clips.length) h+=`<p class="sub">Extraits de buts à envoyer</p><ul class="small">${I.clips.map(c=>`<li>${esc(c.nom||'Buteur ?')}${c.min?' · '+c.min+'’':''} · ${esc(c.ex)} (${(c.file.size/1048576).toFixed(1)} Mo)${c.file.size>50*1048576?' <span class="warn">trop lourd, ne sera pas envoyé</span>':''}</li>`).join('')}</ul>`;
+  if(I.avert.length) h+=`<p class="sub">À vérifier</p><ul class="small">${I.avert.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`;
+  return h+'</section>';
+}
+function impAssign(i,pid){
+  const d=S.editing, I=d&&d._imp, u=I&&I.unknown[i]; if(!u||!pid) return;
+  d.stats[pid]=Object.assign({},u.r); (I.names=I.names||{})[normNom(u.nom)]=pid; I.unknown.splice(i,1); S.editDirty=true; render();
+}
+async function impClips(id,d,stats){
+  const I=d._imp, out=[]; if(!I||!I.clips.length) return out;
+  if(S.local||!sb){ toast('Mode essai : les extraits ne sont pas envoyés.'); return out; }
+  const deja=new Set((d.clips||[]).map(c=>c.src).filter(Boolean)); let n=0;
+  for(const c of I.clips){
+    if(deja.has(c.ex)||c.file.size>50*1048576) continue;
+    const pid=(I.names||{})[normNom(c.nom)]||(findByName(c.nom)||{}).id;
+    if(!pid||!stats[pid]){ toast(`Extrait ${c.ex} : buteur « ${c.nom||'?'} » introuvable sur la feuille, non envoyé.`); continue; }
+    toast(`Envoi des extraits ${++n}/${I.clips.length}…`);
+    const cid=rid(), path=`${id}/${cid}.mp4`;
+    const {error}=await sb.storage.from('clips').upload(path,c.file,{contentType:'video/mp4',upsert:false});
+    if(error){ toast('Envoi de '+c.ex+' impossible : '+error.message); continue; }
+    out.push({id:cid,pid,min:c.min,url:sb.storage.from('clips').getPublicUrl(path).data.publicUrl,path,src:c.ex,at:Date.now()});
+  }
+  return out;
+}
+
 /* ----- Saisie de match ----- */
 function newDraft(){ return {id:rid(),date:today(),opponent:'',type:'championnat',place:'',scoreFor:0,scoreAgainst:0,duration:cfg().matchLength,stats:{},_new:true}; }
 function stepper(pid,k,label,v,isRating){
@@ -808,7 +884,7 @@ function vEditor(){
   const gkK=KPIS.filter(x=>on(x.k)&&x.g==='gardien');
   const phK=KPIS.filter(x=>on(x.k)&&x.g==='physique');
   let h=`<div class="stack"><div class="spread"><h2>${d._new?'Nouveau match':'Modifier le match'}</h2><button class="btn ghost" data-a="edcancel">Annuler</button></div>
-  <section class="panel"><div class="fields">
+  ${vImportPanel(d)}<section class="panel"><div class="fields">
     <label class="f">Date<input type="date" data-ef="date" value="${esc(d.date)}"></label>
     <label class="f">Coup d\u2019envoi<input type="time" data-ef="time" value="${esc(d.time||'')}"></label>
     <label class="f">Adversaire<input data-ef="opponent" value="${esc(d.opponent)}" placeholder="Nom de l\u2019équipe"></label>
@@ -874,6 +950,10 @@ async function saveMatch(){
   }
   const data={date:d.date,time:d.time||'',convoc:d.convoc||null,motm:(d.motm&&stats[d.motm])?d.motm:null,opponent:(d.opponent||'').trim(),type:d.type,place:(d.place||'').trim(),scoreFor:d.scoreFor,scoreAgainst:d.scoreAgainst,duration:parseNum(d.duration)||cfg().matchLength,stats,videoUrl:(d.videoUrl||'').trim(),clips:d.clips||[],updatedAt:Date.now()};
   const id=d.id;
+  if(d._imp){
+    if(d._imp.unknown.length&&!confirm(`${d._imp.unknown.map(u=>u.nom).join(', ')} : non associé(s), ces données ne seront pas enregistrées. Continuer ?`)) return;
+    data.clips=data.clips.concat(await impClips(id,d,stats));
+  }
   if(await write('matches/'+id,data)){ S.editing=null; S.editDirty=false; S.matchId=id; toast('Match enregistré.'); go('m-'+id); render(); }
 }
 
@@ -1733,6 +1813,8 @@ document.addEventListener('click', async e=>{
     case 'delmatch': if(confirm('Supprimer définitivement ce match et toutes ses statistiques ?')){ if(await remove('matches/'+v)){ toast('Match supprimé.'); nav('matchs'); } } break;
     case 'edcancel': if(S.editDirty&&!confirm('Abandonner la saisie de ce match ?')) return; S.editing=null; S.editDirty=false; render(); break;
     case 'edsave': saveMatch(); break;
+    case 'impnew': { const d=S.editing, u=d&&d._imp&&d._imp.unknown[+v]; if(!u) return; const pid=rid();
+      if(await write('players/'+pid,{name:u.nom,number:null,position:u.r.gk?'gardien':'champ',active:true,weights:[],createdAt:Date.now()})){ toast(u.nom+' ajouté à l’effectif.'); impAssign(+v,pid); } break; }
     case 'addclip': addClip(v); break;
     case 'delclip': delClip(v); break;
     case 'edpres': { const d=S.editing; const r=d.stats[v]||(d.stats[v]={}); r.present=!r.present; if(r.present&&r.min==null) r.min=parseNum(d.duration)||cfg().matchLength; if(r.present&&r.gk==null&&(player(v)||{}).position==='gardien'){ r.gk=true; r.gkMin=r.min; } S.editDirty=true; render(); break; }
@@ -1819,6 +1901,8 @@ document.addEventListener('change', async e=>{
     else { const p=player(t.dataset.photo); if(p&&await write('players/'+p.id,Object.assign(stripId(p),{photo:data}))){ toast('Photo enregistrée.'); render(); } }
     return; }
   if(t.dataset.bulk){ const files=Array.from(t.files||[]); t.value=''; if(files.length) bulkImport(files); return; }
+  if(t.dataset.impa){ const files=Array.from(t.files||[]); t.value=''; if(files.length) importAnalyse(files); return; }
+  if(t.dataset.impmap!=null){ impAssign(+t.dataset.impmap,t.value); return; }
   if(t.dataset.imp||t.dataset.impm){
     const f=t.files&&t.files[0]; if(!f) return;
     try{
